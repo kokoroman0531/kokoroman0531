@@ -1,0 +1,59 @@
+name: アメブロをHPに自動同期
+
+# このワークフローはひかるさんの代わりにアメブロをチェックしてHPを更新します
+# 1. 毎日朝6:00（日本時間）に自動実行
+# 2. GitHub の Actions タブから手動実行も可能
+
+on:
+  schedule:
+    # cron式: UTC 21:00 = JST 06:00
+    - cron: '0 21 * * *'
+  workflow_dispatch:  # 手動実行ボタン用
+
+# 必要な権限
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ステップ1: リポジトリのファイルをチェックアウト
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ステップ2: Python環境をセットアップ
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ステップ3: スクリプトに必要なライブラリをインストール
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      # ステップ4: アメブロ移行スクリプトを実行
+      - name: Run ameblo migration script
+        run: |
+          cd tools
+          python migrate_ameblo.py
+        continue-on-error: false
+
+      # ステップ5: 変更があれば自動コミット＆プッシュ
+      - name: Commit and push changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 変更があるかチェック
+          if [[ -n $(git status --porcelain) ]]; then
+            git add -A
+            git commit -m "🔄 Auto-sync ameblo articles ($(date '+%Y-%m-%d %H:%M JST'))"
+            git push
+            echo "✅ アメブロ記事を同期しました"
+          else
+            echo "ℹ️  新しい記事はありませんでした"
+          fi
